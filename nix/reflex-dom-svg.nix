@@ -2,7 +2,7 @@ let
   initialNixpkgs = import <nixpkgs> {};
 
   sources = rec {
-    reflex-dom-svg-pinned = initialNixpkgs.pkgs.lib.importJSON ./reflex-dom-canvas.json;
+    reflex-dom-svg-pinned = initialNixpkgs.pkgs.lib.importJSON ./reflex-dom-svg.json;
     reflex-dom-svg = initialNixpkgs.pkgs.fetchFromGitHub {
       owner = "qfpl";
       repo = "reflex-dom-svg";
