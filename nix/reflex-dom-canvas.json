@@ -1,7 +1,7 @@
 {
   "url": "https://github.com/qfpl/reflex-dom-canvas",
-  "rev": "2e640ae5b759ea8732d098a6ef4bec701dc42bda",
-  "date": "2018-05-29T10:47:24+10:00",
-  "sha256": "0a8fpjzpncfsbaqjgw6wgg4saskqc8x71kc1sp1m7f46l5fw11qa",
+  "rev": "fcabeaf63c60753e0dbb07aab93bc1d2b11db9b8",
+  "date": "2018-05-29T14:51:59+10:00",
+  "sha256": "05b0s1k1a144jyl0zg8crpiqwfl710ncdzyswm4cszrsdfz00rc0",
   "fetchSubmodules": true
 }

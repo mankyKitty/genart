@@ -11,8 +11,17 @@ library
                , reflex-dom >= 0.4 && <0.5
                , static
                , text
+
                , reflex-dom-svg
                , reflex-dom-canvas
+
+               , time
+               , random
+               , mtl >= 2.2
+               , lens
+               , hsnoise
+               , linear
+               , colour
 
   exposed-modules:
     Frontend

@@ -41,5 +41,5 @@ frontend = (head', body)
       _ <- SVG.svg_ (pure svgEl) $
         SVG.svgBasicDyn_ Rectangle SVGT.makeRectProps (pure svgR)
 
-      el "p" $ text $ T.pack commonStuff
+      el "p" . text . T.pack $ commonStuff
       elAttr "img" ("src" =: static @"obelisk.jpg") blank
