@@ -9,6 +9,7 @@ module Squares
   , Size (..)
   , Padding (..)
   , createManyPolys
+  , createPath
   ) where
 
 import           Control.Applicative                  (liftA2)
@@ -32,8 +33,9 @@ import           Data.Word                            (Word8)
 
 import           Linear.V2                            (V2 (V2), _x, _y)
 
-import           Reflex.Dom.Widget.SVG.Types          (Height, Pos, Width, X, Y, SVG_Polygon (..),
+import           Reflex.Dom.Widget.SVG.Types          (Height, Pos, Width, X, Y, SVG_Polygon (..), SVG_Path (..),
                                                        _PosX, _PosY)
+import qualified Reflex.Dom.Widget.SVG.Types.SVG_Path as P
 
 data World = World
   { _worldHeight :: Height
@@ -85,6 +87,47 @@ createPoly (realToFrac . unSize -> size) start =
       (x1, startY) :| [(x1, y1) , (startX, y1) , (startX, startY)]
   in
     SVG_Polygon (startX, startY) rest
+
+makeSquarePath
+  :: Size
+  -> Float
+  -> Float
+  -> SVG_Path
+makeSquarePath (realToFrac . unSize -> sz) x y =
+  let
+    sX = _PosX # (x * 2)
+    sY = _PosY # (y * 2)
+  in
+    D $ P._M sX sY :|
+    [ P._L (addToPos sz sX) sY
+    , P._L (addToPos sz sX) (addToPos sz sY)
+    , P._L sX (addToPos sz sY)
+    , P._L sX sY
+    ]
+
+createPath
+  :: ( MonadRandom m
+     , MonadReader r m
+     , HasWorld r
+     )
+  => Size
+  -> Padding
+  -> Count
+  -> m SVG_Path
+createPath sz pad n = do
+  let
+    pad' = unPadding $ pad
+    toBnd x = (pad', (floor x) `div` 2 - pad')
+
+    rndNum = fmap fromIntegral . Rnd.getRandomR
+
+  wBnd <- views (worldWidth . _Wrapped) toBnd
+  hBnd <- views (worldHeight . _Wrapped) toBnd
+
+  start <- makeSquarePath sz <$> rndNum wBnd <*> rndNum hBnd
+
+  foldr (<>) start . nub <$> replicateM (fromIntegral . unCount $ n)
+    (makeSquarePath sz <$> rndNum wBnd <*> rndNum hBnd)
 
 createManyPolys
   :: ( MonadRandom m

@@ -15,8 +15,8 @@ import           Control.Monad.Reader        (ReaderT, runReaderT)
 
 import           System.Random               (StdGen)
 
-import           Control.Lens                (from, to, under, ( # ), (%~),
-                                              (^.), _Wrapped)
+import           Control.Lens                (from, fusing, over, to, under,
+                                              ( # ), (%~), (^.), _1, _Wrapped)
 import           Control.Monad               (void)
 
 import           Data.Semigroup              ((<>))
@@ -35,6 +35,7 @@ import           Data.Colour                 (Colour)
 import qualified Data.Colour.Names           as Col
 import qualified Data.Colour.SRGB            as Col
 
+import           Numeric.Noise               (Seed)
 import qualified Numeric.Noise.Perlin        as Perlin
 
 import qualified Reflex                      as R
@@ -45,8 +46,9 @@ import qualified Reflex.Dom.CanvasDyn        as Canvas
 import           Reflex.Dom.Widget.SVG       (BasicSVG (Path))
 import qualified Reflex.Dom.Widget.SVG       as SVG
 
-import           Reflex.Dom.Widget.SVG.Types (Height (..), Pos, SVG_El (..), SVG_Polygon,
-                                              Width (..), X, Y, _PosX, _PosY)
+import           Reflex.Dom.Widget.SVG.Types (Height (..), Pos, SVG_El (..),
+                                              SVG_Path, SVG_Polygon, Width (..),
+                                              X, Y, _PosX, _PosY)
 import qualified Reflex.Dom.Widget.SVG.Types as SVGT
 
 import           Squares
@@ -78,91 +80,85 @@ wwidth = Width 60
 svgEl :: SVG_El
 svgEl = SVG_El wwidth wheight Nothing
 
-mkPathAttrs p = Map.fromList
+strokeAttrs = Map.fromList
   [ ("stroke", textColour Col.black)
   , ("stroke-width", "0.2px")
   , ("fill", "none")
-  ] <> SVGT.makePolygonProps p
+  ]
 
-renderPoly
-  :: MonadWidget t m
-  => Dynamic t (SVG_Polygon -> SVG_Polygon)
-  -> Dynamic t SVG_Polygon
-  -> m ()
-renderPoly dPerlin dPoly = void
-  $ SVG.svgBasicDyn_ SVG.Polygon mkPathAttrs (dPerlin <*> dPoly)
-
-runGen
-  :: RandomGen g
-  => g
-  -> r
-  -> ReaderT r (RandT g Identity) a
-  -> (a, g)
-runGen sGen r a =
-  Rnd.runRand (runReaderT a r) sGen
-
-generatePolys
+generatePath
   :: RandomGen g
   => World
   -> Size
+  -> Padding
+  -> Count
   -> g
-  -> ([SVGT.SVG_Polygon], g)
-generatePolys wrld sz gen = runGen gen wrld $
-  createManyPolys sz (Padding 3) (Count 800)
+  -> (SVG_Path, g)
+generatePath wrld sz padding count =
+  Rnd.runRand (runReaderT (createPath sz padding count) wrld)
 
-addPerlinNoise
-  :: RandomGen g
-  => g
-  -> SVGT.SVG_Polygon
-  -> SVGT.SVG_Polygon
-addPerlinNoise gen poly =
+addNoise
+  :: Seed
+  -> (Pos X, Pos Y)
+  -> (Pos X, Pos Y)
+addNoise seed (x,y) =
   let
-    seed = fst $ Rnd.randomR (2.0,5.0) gen
+    seed' = fromIntegral seed
     octaves = 5
     scale = 0.06
     persistance = 0.5
+    noise = Perlin.perlin seed octaves scale persistance
 
-    noise = Perlin.perlin (round seed) octaves scale persistance
+    x' = x ^. _Wrapped . to realToFrac
+    y' = y ^. _Wrapped . to realToFrac
 
-    perlin2d x y = Perlin.noiseValue noise (x + seed, y + seed, seed) - 0.5
+    noiseVal = realToFrac $
+      Perlin.noiseValue noise (x' + seed', y' + seed', seed') - 0.5
 
-    addNoise (x,y) =
-      let
-        noise' = realToFrac $ perlin2d
-          (x ^. _Wrapped . to realToFrac)
-          (y ^. _Wrapped . to realToFrac)
-
-        addN :: Pos s -> Pos s
-        addN = under (from _Wrapped) (+ noise')
-      in
-        (addN x, addN y)
+    addN :: Pos s -> Pos s
+    addN = over _Wrapped (+ noiseVal)
   in
-    poly
-    & SVGT.svg_polygon_start %~ addNoise
-    & SVGT.svg_polygon_path . traverse %~ addNoise
+    (addN x, addN y)
 
-size :: Size
-size = Size 1.5
-
-wrld :: World
-wrld = World wheight wwidth 2
+addPerlinNoisePath
+  :: RandomGen g
+  => g
+  -> SVG_Path
+  -> SVG_Path
+addPerlinNoisePath gen =
+  let
+    seed = fst $ Rnd.randomR (2,5) gen
+  in
+    over (_Wrapped . traverse . SVGT._PathComm . _1)
+    (\cmd -> cmd
+      & SVGT._MoveTo . _Wrapped %~ addNoise seed
+      & SVGT._LineTo . _Wrapped %~ addNoise seed
+    )
 
 body :: StdGen -> Widget x ()
 body sGen = do
   eGenerate <- button "Generate"
 
   let
+    sqPadding = Padding 3
+    sqCount = Count 600
+    world = World wheight wwidth 2
+    size = Size 1.5
+
     dSvgRootAttrs = pure $
       bgProps <> SVGT.makeSVGProps svgEl
 
-  rec (dPolys, dGen) <- splitDynPure <$> holdDyn (mempty, sGen)
-        (generatePolys wrld size <$> current dGen <@ eGenerate)
+    genPath = generatePath
+      world size sqPadding sqCount
 
-  dPerlinNoise <- holdDyn (addPerlinNoise sGen)
-    $ addPerlinNoise <$> current dGen <@ eGenerate
+  rec (dPath, dGen) <- splitDynPure <$> holdDyn (genPath sGen)
+        (genPath <$> current dGen <@ eGenerate)
+
+  dPerlinPath <- holdDyn (addPerlinNoisePath sGen)
+    $ addPerlinNoisePath <$> current dGen <@ eGenerate
 
   void . SVG.svgElDynAttr' SVG.SVG_Root dSvgRootAttrs $
-    simpleList dPolys (renderPoly dPerlinNoise)
+    SVG.svgBasicDyn_ SVG.Path (mappend strokeAttrs . SVGT.makePathProps) (dPerlinPath <*> dPath)
 
 frontend :: StdGen -> (StaticWidget x (), Widget x ())
 frontend sGen =
