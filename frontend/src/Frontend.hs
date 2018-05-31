@@ -129,7 +129,7 @@ addPerlinNoisePath gen =
   let
     seed = fst $ Rnd.randomR (2,5) gen
   in
-    -- @fusing@ is probably hella overkill there, but why not.
+    -- @fusing@ is probably hella overkill here, but why not.
     over (fusing (_Wrapped . traverse . SVGT._PathComm . _1))
     (\cmd -> cmd
       & SVGT._MoveTo . _Wrapped %~ addNoise seed
@@ -159,7 +159,9 @@ body sGen = do
     $ addPerlinNoisePath <$> current dGen <@ eGenerate
 
   void . SVG.svgElDynAttr' SVG.SVG_Root dSvgRootAttrs $
-    SVG.svgBasicDyn_ SVG.Path (mappend strokeAttrs . SVGT.makePathProps) (dPerlinPath <*> dPath)
+    SVG.svgBasicDyn_ SVG.Path
+      (mappend strokeAttrs . SVGT.makePathProps)
+      (dPerlinPath <*> dPath)
 
 frontend :: StdGen -> (StaticWidget x (), Widget x ())
 frontend sGen =
