@@ -17,11 +17,14 @@ library
 
                , time
                , random
+               , MonadRandom
                , mtl >= 2.2
                , lens
                , hsnoise
                , linear
                , colour
+               , clay
+               , containers
 
   exposed-modules:
     Frontend

@@ -1,7 +1,7 @@
 {
   "url": "https://github.com/qfpl/reflex-dom-svg",
-  "rev": "01ca2be49e5fea63cc591490769860cdd71fdfaf",
-  "date": "2018-05-29T15:02:46+10:00",
-  "sha256": "1sc7idal59zvnsyzv733vmrr2jlpv3253n00vdabpxin51nm6943",
+  "rev": "9ce37a19eacad3bf6f75411f29ae6c04d70c6e32",
+  "date": "2018-05-29T15:33:30+10:00",
+  "sha256": "1xq58dwa5gn4lgvjrkj3cm3qwd513czviwffs0ykgqgrvavs1bip",
   "fetchSubmodules": true
 }
