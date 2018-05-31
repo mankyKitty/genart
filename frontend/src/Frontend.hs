@@ -129,7 +129,8 @@ addPerlinNoisePath gen =
   let
     seed = fst $ Rnd.randomR (2,5) gen
   in
-    over (_Wrapped . traverse . SVGT._PathComm . _1)
+    -- @fusing@ is probably hella overkill there, but why not.
+    over (fusing (_Wrapped . traverse . SVGT._PathComm . _1))
     (\cmd -> cmd
       & SVGT._MoveTo . _Wrapped %~ addNoise seed
       & SVGT._LineTo . _Wrapped %~ addNoise seed
