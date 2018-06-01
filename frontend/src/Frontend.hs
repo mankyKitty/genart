@@ -161,6 +161,7 @@ makePolyAnimate poly =
            , ("dur", "3s")
            , ("repeatCount", "1")
            , ("fill","freeze")
+           , ("begin", "2s")
            ]
 
 body :: StdGen -> UTCTime -> Widget x ()
@@ -197,9 +198,15 @@ body sGen _ = do
   let
     dPerlin = addPerlinNoiseToPoly . fst <$> dRandInt
 
+  -- dNoiseAnim <- holdDyn (const mempty) $ leftmost
+  --   [ makePolyAnimate <$ ePokePerlin
+  --   , const mempty <$ eGenerate
+  --   ]
+
   void . SVG.svgElDynAttr' SVG.SVG_Root dSvgRootAttrs $
     simpleList (NE.toList <$> dPolys) $ (\dPoly ->
       SVG.svgBasicDyn SVG.Polygon makePolyProps dPoly $
+        -- dNoiseAnim <*> (dPerlin <*> dPoly)
         fmap makePolyAnimate $ dPerlin <*> dPoly
       )
 
