@@ -1,14 +1,15 @@
 module Devel where
 
-import Obelisk.Run
+import           Obelisk.Run
 
-import Backend
-import Frontend
+import           Backend
+import           Frontend
 
-import qualified System.Random                    as Rnd
+import           Data.Time     (getCurrentTime)
+import qualified System.Random as Rnd
 
 main :: Int -> IO ()
 main port = do
   sGen <- Rnd.getStdGen
-  run port backend (frontend sGen)
-
+  time <- getCurrentTime
+  run port backend (frontend sGen time)

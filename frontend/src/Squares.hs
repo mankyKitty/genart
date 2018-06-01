@@ -1,6 +1,8 @@
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TemplateHaskell           #-}
+{-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE ViewPatterns              #-}
 module Squares
   ( World (..)
@@ -8,14 +10,19 @@ module Squares
   , Count (..)
   , Size (..)
   , Padding (..)
-  , createManyPolys
+  , Poly (..)
+  , PolyAttrs (..)
+  , StrokeFill (..)
+  , Colour (..)
   , createPath
+  , createPolygons
   ) where
 
 import           Control.Applicative                  (liftA2)
 import           Control.Lens                         (Getter, from, makeClassy,
-                                                       re, to, under, views,
-                                                       ( # ), (^.), _Wrapped)
+                                                       makeWrapped, re, to,
+                                                       under, views, ( # ),
+                                                       (^.), _Wrapped)
 
 import           Control.Monad                        (replicateM)
 import           Control.Monad.Reader                 (MonadReader)
@@ -33,14 +40,15 @@ import           Data.Word                            (Word8)
 
 import           Linear.V2                            (V2 (V2), _x, _y)
 
-import           Reflex.Dom.Widget.SVG.Types          (Height, Pos, Width, X, Y, SVG_Polygon (..), SVG_Path (..),
-                                                       _PosX, _PosY)
+import           Reflex.Dom.Widget.SVG.Types          (Height, Pos,
+                                                       SVG_Path (..),
+                                                       SVG_Polygon (..), Width,
+                                                       X, Y, _PosX, _PosY)
 import qualified Reflex.Dom.Widget.SVG.Types.SVG_Path as P
 
 data World = World
   { _worldHeight :: Height
   , _worldWidth  :: Width
-  , _worldPerlinSeed :: Int
   }
 makeClassy ''World
 
@@ -52,6 +60,25 @@ newtype Size = Size { unSize :: Double }
 
 newtype Padding = Padding { unPadding :: Word8 }
   deriving (Eq, Show)
+
+data StrokeFill
+  = Stroke
+  | Fill
+  deriving (Eq, Show)
+
+data Colour
+  = Greenish
+  | Orangeish
+  | Redish
+  deriving (Show, Eq)
+
+newtype PolyAttrs = PolyAttrs
+  { unPolyAttrs :: (StrokeFill, Colour) }
+  deriving (Eq, Show)
+
+newtype Poly = Poly
+  { unPoly :: (PolyAttrs, SVG_Polygon) }
+  deriving (Eq,Show)
 
 toPosX :: Real a => Getter a (Pos X)
 toPosX = to realToFrac . re _PosX
@@ -68,42 +95,64 @@ zeroY = _PosY # 0
 negatePos :: Pos p -> Pos p
 negatePos = under (from _Wrapped) negate
 
-addToPos :: Float -> Pos p -> Pos p
-addToPos n = under (from _Wrapped) (+n)
+addToPos :: Real a => a -> Pos p -> Pos p
+addToPos n = under (from _Wrapped) (+ realToFrac n)
 
-createPoly
+createPositions
   :: Size
-  -> V2 Double
-  -> SVG_Polygon
-createPoly (realToFrac . unSize -> size) start =
-  let
-    startX = start ^. _x . toPosX
-    startY = start ^. _y . toPosY
-
-    x1 = addToPos size startX
-    y1 = addToPos size startY
-
-    rest =
-      (x1, startY) :| [(x1, y1) , (startX, y1) , (startX, startY)]
-  in
-    SVG_Polygon (startX, startY) rest
+  -> Float
+  -> Float
+  -> (Pos X, Pos Y, Pos X, Pos Y)
+createPositions (realToFrac . unSize -> sz) x y =
+  ( _PosX # (x * 2)
+  , _PosY # (y * 2)
+  , _PosX # (sz + x * 2)
+  , _PosY # (sz + y * 2)
+  )
 
 makeSquarePath
   :: Size
   -> Float
   -> Float
   -> SVG_Path
-makeSquarePath (realToFrac . unSize -> sz) x y =
+makeSquarePath sz x y =
   let
-    sX = _PosX # (x * 2)
-    sY = _PosY # (y * 2)
+    (sX,sY,sPlusX,sPlusY) = createPositions sz x y
   in
     D $ P._M sX sY :|
-    [ P._L (addToPos sz sX) sY
-    , P._L (addToPos sz sX) (addToPos sz sY)
-    , P._L sX (addToPos sz sY)
-    , P._L sX sY
+    [ P._L sPlusX sY            -- a > b
+    , P._L sPlusX sPlusY        -- b > c
+    , P._L sX sPlusY            -- c > d
+    , P._L sX sY                -- d > a
     ]
+
+createShape
+  :: ( MonadRandom m
+     , MonadReader r m
+     , HasWorld r
+     , Real n
+     , Eq s
+     )
+  => Size
+  -> Padding
+  -> Count
+  -> (n -> n -> s)
+  -> m (NonEmpty s)
+createShape sz pad n f = do
+  let
+    pad' = unPadding pad
+    toBnd x = (pad', floor x `div` 2 - pad')
+
+    rndNum = fmap fromIntegral . Rnd.getRandomR
+
+  wBnd <- views (worldWidth . _Wrapped) toBnd
+  hBnd <- views (worldHeight . _Wrapped) toBnd
+
+  let mk = f <$> rndNum wBnd <*> rndNum hBnd
+
+  fmap NE.nub . (:|)
+    <$> mk
+    <*> replicateM (unCount n) mk
 
 createPath
   :: ( MonadRandom m
@@ -114,22 +163,10 @@ createPath
   -> Padding
   -> Count
   -> m SVG_Path
-createPath sz pad n = do
-  let
-    pad' = unPadding $ pad
-    toBnd x = (pad', (floor x) `div` 2 - pad')
+createPath sz pad n =
+  sconcat <$> createShape sz pad n (makeSquarePath sz)
 
-    rndNum = fmap fromIntegral . Rnd.getRandomR
-
-  wBnd <- views (worldWidth . _Wrapped) toBnd
-  hBnd <- views (worldHeight . _Wrapped) toBnd
-
-  start <- makeSquarePath sz <$> rndNum wBnd <*> rndNum hBnd
-
-  foldr (<>) start . nub <$> replicateM (fromIntegral . unCount $ n)
-    (makeSquarePath sz <$> rndNum wBnd <*> rndNum hBnd)
-
-createManyPolys
+createPolygons
   :: ( MonadRandom m
      , MonadReader r m
      , HasWorld r
@@ -137,18 +174,26 @@ createManyPolys
   => Size
   -> Padding
   -> Count
-  -> m [SVG_Polygon]
-createManyPolys sqSize pad n = do
+  -> m (NonEmpty Poly)
+createPolygons sz pad n =
   let
-    pad' = unPadding $ pad
-    toBnd x = (pad', (floor x) `div` 2 - pad')
+    attrs = fmap PolyAttrs $ (,)
+      <$> Rnd.weighted [ (Stroke, 0.4), (Fill, 0.6) ]
+      <*> Rnd.uniform [ Greenish, Redish, Orangeish ]
 
-  wBnd <- views (worldWidth . _Wrapped) toBnd
-  hBnd <- views (worldHeight . _Wrapped) toBnd
+    mkPoly x y =
+      let
+        (sX,sY,sPlusX,sPlusY) = createPositions sz x y
+      in
+        SVG_Polygon (sX,sY)
+        $ (sPlusX, sY)
+        :| [ (sPlusX, sPlusY)
+           , (sX, sPlusY)
+           , (sX, sY)
+           ]
+  in
+    traverse (fmap Poly . liftA2 (,) attrs . pure) =<<
+      createShape sz pad n mkPoly
 
-  let
-    toDbl x y = V2 (fromIntegral x * 2) (fromIntegral y * 2)
-
-    mk = liftA2 toDbl (Rnd.getRandomR wBnd) (Rnd.getRandomR hBnd)
-
-  fmap nub . replicateM (fromIntegral . unCount $ n) $ createPoly sqSize <$> mk
+makeWrapped ''PolyAttrs
+makeWrapped ''Poly

@@ -11,8 +11,6 @@ project ./. ({ ... }: {
   {
     reflex-dom-canvas = self.callCabal2nix "reflex-dom-canvas" rfx-canvas {};
     reflex-dom-svg = self.callCabal2nix "reflex-dom-svg" rfx-svg {};
-    # reflex-dom-canvas = self.callPackage rfx-canvas {};
-    # reflex-dom-svg = self.callPackage rfx-svg {};
   };
 
   # Don't want any mobile builds just yet.
